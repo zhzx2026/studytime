@@ -82,6 +82,9 @@ setup_sdk() {
     mkdir -p android-sdk/build-tools
     curl -sSL -o bt.zip https://dl.google.com/android/repository/build-tools_r34-linux.zip
     unzip -q bt.zip -d btX && rm -rf "$BT" && mv btX/android-14 "$BT" && rm -rf bt.zip btX
+    # 官方包里两个 Java jar 在 lib/ 下；build.sh 统一认扁平路径，这里拍平
+    [ -f "$BT/lib/d8.jar" ] && cp "$BT/lib/d8.jar" "$BT/d8.jar"
+    [ -f "$BT/lib/apksigner.jar" ] && cp "$BT/lib/apksigner.jar" "$BT/apksigner.jar"
     echo "== Android platform 34 (官方)"
     mkdir -p android-sdk/platforms
     curl -sSL -o p.zip https://dl.google.com/android/repository/platform-34-ext7_r02.zip
