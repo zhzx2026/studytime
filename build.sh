@@ -49,7 +49,9 @@ aapt2 link -o $B/app.unsigned.apk -I "$AJ" --manifest AndroidManifest.xml \
    --version-code "$VC" --version-name "$VER" --auto-add-overlay
 echo "== javac"
 find src $B/gen -name '*.java' > $B/srcs.txt
-javac -encoding UTF-8 -source 8 -target 8 -nowarn -Xlint:-options -bootclasspath "$AJ" -d $B/classes @$B/srcs.txt \
+# 注意：android.jar 里没有 java.lang.invoke.LambdaMetafactory，用 -bootclasspath android.jar 时 lambda 编不过。
+# 所以 java.* 取 JDK 的 Java 8 API（--release 8），android.* / org.json 从 classpath 的 android.jar 取；d8 负责把 lambda 脱糖。
+javac -encoding UTF-8 --release 8 -nowarn -cp "$AJ" -d $B/classes @$B/srcs.txt \
   2> $B/javac.log || { cat $B/javac.log; exit 1; }
 echo "== d8"
 find $B/classes -name '*.class' > $B/cls.txt
