@@ -26,6 +26,25 @@
 
 否则离开三小时回来凭空多出一排番茄，统计就成了玩具。`PomoTest` 第 8 组就是这条的回归锁。
 
+### 幂等结算 + Ctl 胶水（到点链路）
+
+页面心跳和 `AlarmReceiver` **两条路都会调 `Pomo.tick`**，而 tick 本身幂等：谁先把 `endAt`
+结掉，后来者拿到空事件、空手而归——账永远只记一笔。因此：
+
+- 结算后的记账统一走 `Ctl.recordEvents`（`Recs` / 绑定任务进度），页面和 receiver 共用；
+- 改完 pomo 状态**必须** `Ctl.savePomoArm()`（落盘 + 排/撤精确闹钟 + 刷新常驻通知），
+  不许再直接 `Prefs.savePomo`——漏排闹钟 = 后台到点没人叫你；
+- `Ctl` 里 `{cfg,todo,recs,pomo,bindId}` 是进程内唯一一份，页面用 `pullCtl()` 拉引用、
+  设置页用 `Cfg` 保存后 `Ctl.cfgChanged()` 让 `pomo.cfg` 跟上；两边各持一份必出现
+  「改了不生效 / 各记各的」；
+- 没有通知权限时 `AlarmReceiver` 退回 `SoundFx`（声音+振动）兜底，丢提醒但不丢计时。
+
+### 自动开关一拆二（auto / autoFocus）
+
+`auto` 只管「专注到点 → 自动进休息」（默认开），`autoFocus` 管「休息到点 → 自动开下一轮」
+（**默认关**：挂着机也自己开跑，会凭空多出番茄）。老配置串里没有 `af` 键 → 按关读入。
+Pomo 里判下一段开不开跑一律走 `autoNext(next)`，别再散落 `if (cfg.auto)`。
+
 ### 任务完成计数（Todo.Task.counted）
 
 勾选完成计入当天 `Recs.tasks`，`counted` 标志保证一条任务**只记一次**；

@@ -7,20 +7,25 @@
 
 ## 功能
 
-1. **番茄钟**：专注 / 短休 / 长休三段自动轮转（默认 25/5/15，每 4 轮一次长休，全部可调）；
-   自绘圆环倒计时、正点提示音 + 振动、到点自动进入下一段（可关，关了就停下等你按「继续」）
-2. **杀后台续存**：计时走墙钟（`endAt - now`），锁屏、闪退、被系统杀掉重开都接着走；
-   意外退出的补账规则见 `AGENT.md`——最多只承认一个番茄，绝不凭空刷统计
+1. **番茄钟**：专注 / 短休 / 长休三段轮转（默认 25/5/15，每 4 轮一次长休，全部可调）；
+   自绘圆环倒计时、正点提示音 + 振动；到点自动进休息（默认开），休息结束**下一轮默认等你点**
+   「继续」（怕挂着机自己开跑刷统计；两个开关都在设置里，想全链式就打开）
+2. **后台到点提醒**：精确闹钟 + 通知——锁屏、切后台、App 被杀都会到点叫你；
+   计时中有一条常驻倒计时通知（系统 chronometer，锁屏也走表）；回到 App 一次把账补齐，
+   补账规则见 `AGENT.md`——最多只承认一个番茄，绝不凭空刷统计；没有通知权限就退回声音+振动
 3. **待办清单**：加/勾/删、预计番茄数、按「全部 / 未完成 / 已完成」过滤；
    长按可设为**当前专注任务**（🎯 绑定后专注页显示它，做完一个番茄自动 +1 进度）
 4. **连续打卡（坚持）**：每日目标（默认 4 个番茄）达标即续签；今天还没达标**不断签**；
    当前连续 / 历史最高 / 今日进度条 / 本周七列柱状图 / 累计四项，配分档激励文案
 5. **月历热力图**：周一开头的月视图，格子颜色 = 当天番茄离目标的距离（5 档），
    点格子看当天明细（番茄数 · 专注分钟 · 完成任务数），‹ › 翻月、一键回今天
-6. **设置**：时长档位、每日目标、自动续、提示音/振动、清空数据、关于（版本 + 构建标识）
+6. **设置**：时长档位、每日目标、两个自动开关（休息自动 / 下轮自动）、屏幕常亮、
+   提示音/振动、清空数据、关于（版本 + 构建标识）
 7. **深浅色**：跟随系统的浅色（暖纸）/ 深色（navy）双主题，热力图两套配色都看得见格子
 
-数据全部落在本机 SharedPreferences，**零联网、零账号**；权限只要 `VIBRATE`。
+数据全部落在本机 SharedPreferences，**零联网、零账号**；权限只要 `VIBRATE`、
+通知（13+ 的 `POST_NOTIFICATIONS` 运行时申请）和精确闹钟（`USE_EXACT_ALARM` /
+`SCHEDULE_EXACT_ALARM`，都为到点提醒服务，不碰网络）。
 
 ## 构建与测试（无 Gradle，纯 SDK 工具链）
 
@@ -42,13 +47,14 @@ ALLOW_FRESH_KEY=1 bash build.sh  #    第一次本地出包（现造测试钥匙
 
 ```
 build.sh               # 出包流水线（aapt2 → javac/ecj → d8 → zipalign → apksigner）
-AndroidManifest.xml    # 包名 com.aidemo.studytime，两个 Activity
+AndroidManifest.xml    # 包名 com.aidemo.studytime，两个 Activity + 到点闹钟接收器
 src/com/aidemo/studytime/
   Pomo/Todo/Recs/Cal/Streak/Cfg   # 纯逻辑六件套：零 Android 依赖，主机直接可测
   MainActivity/SettingsActivity   # 单 Activity 四页签 + 设置页（UI 全代码拼）
+  Ctl/Notify/AlarmReceiver        # 后台到点链路：共享单例 + 通知 + 精确闹钟接收器
   RingView/CalView/WeekBarsView/MeterView  # 自绘视图
   Prefs/Ui/SoundFx/App/BuildInfo  # 落盘 / 手搓 UI 工具 / 音效 / 入口 / 构建标识
-res/                   # 只有主题、颜色、图标（浅/深两套）
+res/                   # 只有主题、颜色、图标（浅/深两套 + 通知小图标）
 test/                  # 主机测试（T.java 小断言 + 六个 Test）
 scripts/               # setup_tools / run_tests / refcheck / version / zipalign(py)
 .github/workflows/ci.yml  # push 即测即建，产物挂 artifact
@@ -63,6 +69,8 @@ scripts/               # setup_tools / run_tests / refcheck / version / zipalign
 
 ## 说明
 
-- 计时在后台不弹通知（v1.0 范围）：回到 App 会按墙钟把账一次补齐；
-  番茄正点时若 App 在前台，有提示音 + 振动
+- **后台到点**：计时走墙钟 + `AlarmManager` 精确闹钟，锁屏/切后台/被杀都到点弹通知
+  （响铃振动跟通知走）；回到 App 按墙钟一次补账，最多只承认一个番茄。
+  Android 13+ 首启会申请通知权限，拒绝则退回提示音 + 振动；
+  国产 ROM 的电池优化若把闹钟饿死，回到 App 仍会补账——时间不丢，只可能晚提醒
 - 「完成任务数」按天计，反复勾选不会重复刷数（`Todo.Task.counted` 去重）

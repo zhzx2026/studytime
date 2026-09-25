@@ -21,7 +21,8 @@ public class SettingsActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        cfg = Prefs.cfg();
+        Ctl.ensure();
+        cfg = Ctl.cfg; // 直接改进程里那一份，保存后 Ctl.cfgChanged() 让 pomo 跟上
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -62,7 +63,9 @@ public class SettingsActivity extends Activity {
         pickRow("每日目标", cfg.goalPomos + " 个番茄", Cfg.GOAL_CHOICES, cfg.goalPomos, v -> {
             cfg.goalPomos = v; save();
         });
-        switchRow("到点自动进入下一段", cfg.auto, on -> { cfg.auto = on; save(); });
+        switchRow("专注结束自动开始休息", cfg.auto, on -> { cfg.auto = on; save(); });
+        switchRow("休息结束自动开始下一轮", cfg.autoFocus, on -> { cfg.autoFocus = on; save(); });
+        switchRow("计时中屏幕常亮", cfg.keepOn, on -> { cfg.keepOn = on; save(); });
         switchRow("完成提示音", cfg.sound, on -> { cfg.sound = on; save(); });
         switchRow("完成振动", cfg.vibrate, on -> { cfg.vibrate = on; save(); });
 
@@ -93,6 +96,7 @@ public class SettingsActivity extends Activity {
 
     void save() {
         Prefs.saveCfg(cfg);
+        Ctl.cfgChanged(); // 让 pomo/页面立刻用上新配置
     }
 
     String versionName() {

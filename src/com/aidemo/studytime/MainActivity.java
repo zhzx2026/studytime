@@ -60,13 +60,16 @@ public class MainActivity extends Activity {
     final Handler handler = new Handler(Looper.getMainLooper());
     boolean resumed = false;
     boolean ticking = false;
+    boolean keepOnFlag = false;
+    /** 页面活着的引用：AlarmReceiver 结算完通知 UI 刷新 */
+    static MainActivity live;
 
     final Runnable ticker = new Runnable() {
         @Override public void run() {
             ticking = false;
             if (!resumed) return;
             long now = System.currentTimeMillis();
-            boolean changed = processEvents(pomo.tick(now), now);
+            boolean changed = handleTick(now);
             if (cur == TAB_FOCUS || changed) refreshFocus();
             if (changed) refreshCurrent();
             if (pomo.running) startTicker();
@@ -75,13 +78,16 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        live = this;
 
-        cfg = Prefs.cfg();
-        todo = Prefs.todo();
-        recs = Prefs.recs();
-        pomo = new Pomo(cfg);
-        Prefs.loadPomo(pomo);
-        bindId = Prefs.bindId();
+        // 数据由 Ctl 进程内共享（页面/闹钟接收器同一份，避免两边各记一次）
+        Ctl.ensure();
+        pullCtl();
+
+        // 13+ 通知运行时授权（到点提醒用；拒绝也不影响计时，receiver 会用声音兜底）
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !Notify.granted(this)) {
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
+        }
 
         String today = Cal.todayKey();
         selDay = today;
@@ -92,6 +98,37 @@ public class MainActivity extends Activity {
         buildSkeleton();
         selectTab(TAB_FOCUS);
         refreshAll();
+    }
+
+    @Override protected void onDestroy() {
+        if (live == this) live = null;
+        super.onDestroy();
+    }
+
+    /** 从 Ctl 拉最新引用（设置页改完配置 / receiver 可能换过对象） */
+    void pullCtl() {
+        cfg = Ctl.cfg;
+        todo = Ctl.todo;
+        recs = Ctl.recs;
+        pomo = Ctl.pomo;
+        bindId = Ctl.bindId;
+    }
+
+    /** 改绑定任务的唯一入口：三处状态一起走 */
+    void setBind(int id) {
+        bindId = id;
+        Ctl.bindId = id;
+        Prefs.saveBind(id);
+    }
+
+    /** AlarmReceiver 结算完的回声：刷新页面；在前台就补一份即时反馈 */
+    public void refreshFromAlarm(int[] evs) {
+        if (isFinishing()) return;
+        refreshAll();
+        if (resumed) {
+            for (int ev : evs) feedback(ev);
+            startTicker();
+        }
     }
 
     // ── 骨架：顶栏 + 内容 + 底部页签 ────────────────────────────────────────
@@ -189,10 +226,11 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
-        cfg = Prefs.cfg();
-        pomo.cfg = cfg;
+        Ctl.cfgChanged();   // 设置页可能改过配置
+        pullCtl();
         // 杀后台/锁屏期间到点的账，回来一次补齐（补账规则见 Pomo.tick）
-        boolean changed = processEvents(pomo.tick(System.currentTimeMillis()), System.currentTimeMillis());
+        boolean changed = handleTick(System.currentTimeMillis());
+        Notify.cancelDone(this); // 人回来了，到点通知收掉
         refreshAll();
         if (changed || pomo.running) startTicker();
     }
@@ -200,33 +238,25 @@ public class MainActivity extends Activity {
     @Override protected void onPause() {
         resumed = false;
         stopTicker();
-        Prefs.savePomo(pomo);
+        setKeepOn(false);
+        // 落盘 + 排好下一发闹钟（后台由 AlarmReceiver 接力）
+        Ctl.savePomoArm(this);
         super.onPause();
     }
 
-    /**
-     * 把引擎返回的事件落账：WORK → 番茄数+1、分钟数按当时配置、绑定任务的「已做」+1、
-     * 提示音/振动；休息事件只提示。返回是否动了数据。
-     */
-    boolean processEvents(int[] evs, long now) {
-        if (evs == null || evs.length == 0) return false;
-        boolean rec = false;
-        String today = Cal.todayKey(now);
-        for (int ev : evs) {
-            if (ev == Pomo.EV_WORK) {
-                recs.addPomo(today, cfg.workMin);
-                Todo.Task t = bindId != 0 ? todo.byId(bindId) : null;
-                if (t != null && !t.done) {
-                    t.donePomos++;
-                    Prefs.saveTodo(todo);
-                }
-                rec = true;
-            }
-            SoundFx.ding(this, cfg.sound, cfg.vibrate);
-        }
-        Prefs.savePomo(pomo);
-        if (rec) Prefs.saveRecs(recs);
+    /** 前台心跳：结算 + 落账 + 排闹钟 + 音效/Toast。返回是否动了数据。 */
+    boolean handleTick(long now) {
+        int[] evs = pomo.tick(now);
+        if (!Ctl.recordEvents(this, evs, now)) return false;
+        Ctl.savePomoArm(this);
+        for (int ev : evs) feedback(ev);
         return true;
+    }
+
+    /** 即时反馈：提示音 + 振动 + 一句 Toast（通知渠道在后台负责响铃） */
+    void feedback(int ev) {
+        SoundFx.ding(this, cfg.sound, cfg.vibrate);
+        Ui.toast(this, ev == Pomo.EV_WORK ? "🍅 番茄完成！休息一下吧" : "⏰ 休息结束，继续加油");
     }
 
     static String mmss(long ms) {
@@ -302,7 +332,7 @@ public class MainActivity extends Activity {
         } else {
             pomo.resume(now);
         }
-        Prefs.savePomo(pomo);
+        Ctl.savePomoArm(this);
         refreshFocus();
         startTicker();
     }
@@ -312,7 +342,7 @@ public class MainActivity extends Activity {
         if (pomo.isBreak()) {
             // 休息中：第二键 = 跳过休息
             pomo.skip(now);
-            Prefs.savePomo(pomo);
+            Ctl.savePomoArm(this);
             refreshFocus();
             startTicker();
             return;
@@ -320,7 +350,7 @@ public class MainActivity extends Activity {
         if (pomo.state == Pomo.IDLE) return;
         Ui.confirm(this, "放弃这一轮番茄？进度不计入今天的记录。", "放弃", () -> {
             pomo.reset();
-            Prefs.savePomo(pomo);
+            Ctl.savePomoArm(this);
             refreshFocus();
             refreshCurrent();
         });
@@ -347,42 +377,59 @@ public class MainActivity extends Activity {
                 Ui.col(this, isBreak ? R.color.green : R.color.accent));
 
         int tp = recs.pomosOn(Cal.todayKey());
-        focusTop.setText(String.format(Locale.CHINA, "今日番茄 %d/%d · 连续打卡 %d 天",
+        setTxt(focusTop, String.format(Locale.CHINA, "今日番茄 %d/%d · 连续打卡 %d 天",
                 tp, cfg.goalPomos, Streak.current(recs.days, Cal.todayKey(), cfg.goalPomos)));
 
-        phaseHint.setText(String.format(Locale.CHINA, "专注 %d 分钟 · 短休 %d · 长休 %d（每 %d 轮）%s",
-                cfg.workMin, cfg.shortMin, cfg.longMin, cfg.longEvery,
-                cfg.auto ? " · 到点自动续" : " · 到点停下等我开始"));
+        // 两个自动开关分开说，别让人误以为下一轮也会自己开跑
+        String autoTxt = !cfg.auto ? " · 到点停下等我开始"
+                : cfg.autoFocus ? " · 到点自动续" : " · 休息自动 · 下轮等我开始";
+        setTxt(phaseHint, String.format(Locale.CHINA, "专注 %d 分钟 · 短休 %d · 长休 %d（每 %d 轮）%s",
+                cfg.workMin, cfg.shortMin, cfg.longMin, cfg.longEvery, autoTxt));
 
         Todo.Task bind = bindId != 0 ? todo.byId(bindId) : null;
         if (bind == null) {
-            if (bindId != 0) { bindId = 0; Prefs.saveBind(0); }
+            if (bindId != 0) setBind(0);
             if (todo.countOpen() > 0) {
-                taskStrip.setText("选个待办当靶子 ›");
+                setTxt(taskStrip, "选个待办当靶子 ›");
                 taskStrip.setTextColor(Ui.col(this, R.color.text2));
             } else {
-                taskStrip.setText("去「待办」加一条，专注更有奔头 ›");
+                setTxt(taskStrip, "去「待办」加一条，专注更有奔头 ›");
                 taskStrip.setTextColor(Ui.col(this, R.color.text2));
             }
         } else {
-            taskStrip.setText("🎯 " + bind.title + (bind.est > 0 ? "（" + Math.min(bind.donePomos, bind.est) + "/" + bind.est + "）" : ""));
+            setTxt(taskStrip, "🎯 " + bind.title + (bind.est > 0 ? "（" + Math.min(bind.donePomos, bind.est) + "/" + bind.est + "）" : ""));
             taskStrip.setTextColor(Ui.col(this, R.color.text));
         }
 
-        cycleLine.setText(String.format(Locale.CHINA, "本轮 %d/%d 个番茄", pomo.cycle, cfg.longEvery));
+        setTxt(cycleLine, String.format(Locale.CHINA, "本轮 %d/%d 个番茄", pomo.cycle, cfg.longEvery));
 
         if (pomo.state == Pomo.IDLE) {
-            btnMain.setText("开始专注");
+            setTxt(btnMain, "开始专注");
             btnSecond.setVisibility(View.GONE);
         } else if (pomo.isBreak()) {
-            btnMain.setText(pomo.running ? "暂停" : "继续");
-            btnSecond.setText("跳过休息");
+            setTxt(btnMain, pomo.running ? "暂停" : "继续");
+            setTxt(btnSecond, "跳过休息");
             btnSecond.setVisibility(View.VISIBLE);
         } else {
-            btnMain.setText(pomo.running ? "暂停" : "继续");
-            btnSecond.setText("放弃");
+            setTxt(btnMain, pomo.running ? "暂停" : "继续");
+            setTxt(btnSecond, "放弃");
             btnSecond.setVisibility(View.VISIBLE);
         }
+        // 屏幕常亮只在「计时中 + 专注页 + 你正开着」时生效
+        setKeepOn(pomo.running && resumed && cur == TAB_FOCUS && cfg.keepOn);
+    }
+
+    /** 只在文案变化时才 setText：每 250ms 心跳不至于反复触发排版 */
+    static void setTxt(android.widget.TextView v, CharSequence s) {
+        CharSequence cur = v.getText();
+        if (!android.text.TextUtils.equals(cur, s == null ? "" : s)) v.setText(s);
+    }
+
+    void setKeepOn(boolean on) {
+        if (on == keepOnFlag) return;
+        keepOnFlag = on;
+        if (on) getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     void openTaskPicker() {
@@ -402,8 +449,7 @@ public class MainActivity extends Activity {
         int checked = 0;
         for (int i = 0; i < open.size(); i++) if (open.get(i).id == bindId) checked = i + 1;
         Ui.pick(this, "这次专注盯哪条？", names, checked, idx -> {
-            bindId = idx == 0 ? 0 : open.get(idx - 1).id;
-            Prefs.saveBind(bindId);
+            setBind(idx == 0 ? 0 : open.get(idx - 1).id);
             refreshFocus();
         });
     }
@@ -575,7 +621,7 @@ public class MainActivity extends Activity {
                 t.counted = true;
                 recs.addTask(Cal.todayKey());
                 Prefs.saveRecs(recs);
-                if (bindId == t.id) { bindId = 0; Prefs.saveBind(0); }
+                if (bindId == t.id) setBind(0);
             } else if (!nowDone && t.counted) {
                 t.counted = false;
                 String k = Cal.todayKey();
@@ -585,8 +631,7 @@ public class MainActivity extends Activity {
                     Prefs.saveRecs(recs);
                 }
             } else if (nowDone && bindId == t.id) {
-                bindId = 0;
-                Prefs.saveBind(0);
+                setBind(0);
             }
             Prefs.saveTodo(todo);
             refreshTodos();
@@ -596,7 +641,7 @@ public class MainActivity extends Activity {
         title.setOnClickListener(toggle);
         mid.setOnClickListener(toggle);
         del.setOnClickListener(v -> {
-            if (bindId == t.id) { bindId = 0; Prefs.saveBind(0); }
+            if (bindId == t.id) setBind(0);
             todo.remove(t.id);
             Prefs.saveTodo(todo);
             refreshTodos();
@@ -614,8 +659,7 @@ public class MainActivity extends Activity {
                 idx -> {
                     if (idx == 0) {
                         if (t.done) { Ui.toast(this, "已完成的任务不用再设靶子"); return; }
-                        bindId = t.id;
-                        Prefs.saveBind(bindId);
+                        setBind(t.id);
                         refreshFocus();
                         refreshTodos();
                     } else if (idx == 1) {
@@ -629,7 +673,7 @@ public class MainActivity extends Activity {
                             refreshTodos();
                         });
                     } else {
-                        if (bindId == t.id) { bindId = 0; Prefs.saveBind(0); }
+                        if (bindId == t.id) setBind(0);
                         todo.remove(t.id);
                         Prefs.saveTodo(todo);
                         refreshTodos();

@@ -11,6 +11,7 @@ public class CfgTest {
         T.eqi(4, d.longEvery, "每 4 轮长休");
         T.eqi(4, d.goalPomos, "每日目标 4");
         T.ok(d.sound && d.vibrate && d.auto, "默认提示全开");
+        T.ok(!d.autoFocus && !d.keepOn, "默认：下一轮不自动开跑、屏幕不常亮");
 
         // 2. 往返
         d.workMin = 45;
@@ -21,6 +22,8 @@ public class CfgTest {
         d.sound = false;
         d.vibrate = false;
         d.auto = false;
+        d.autoFocus = true;
+        d.keepOn = true;
         Cfg back = Cfg.load(d.save());
         T.eqi(45, back.workMin, "往返 workMin");
         T.eqi(3, back.shortMin, "往返 shortMin");
@@ -30,6 +33,13 @@ public class CfgTest {
         T.ok(!back.sound, "往返 sound=false");
         T.ok(!back.vibrate, "往返 vibrate=false");
         T.ok(!back.auto, "往返 auto=false");
+        T.ok(back.autoFocus, "往返 af=true");
+        T.ok(back.keepOn, "往返 ko=true");
+
+        // 2b. 老配置（没有 af/ko 两键）→ 都按关处理
+        Cfg old = Cfg.load("w=45,s=3,l=30,n=2,g=8,snd=0,vib=0,auto=0");
+        T.ok(!old.autoFocus, "老串 af 缺省关");
+        T.ok(!old.keepOn, "老串 ko 缺省关");
 
         // 3. null / 空串 / 垃圾 → 全默认
         Cfg n1 = Cfg.load(null);

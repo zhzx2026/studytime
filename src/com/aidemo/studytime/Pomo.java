@@ -78,7 +78,7 @@ public final class Pomo {
         int ev = state == LONG ? EV_LONG : EV_SHORT;
         long anchor = running ? endAt : now;
         state = WORK;
-        if (cfg.auto) {
+        if (autoNext(WORK)) {
             running = true;
             endAt = anchor + phaseMs(WORK);
             remaining = 0;
@@ -135,7 +135,7 @@ public final class Pomo {
         } else {
             next = WORK;
         }
-        if (cfg.auto) {
+        if (autoNext(next)) {
             state = next;
             running = true;
             endAt = anchor + phaseMs(next);
@@ -147,6 +147,11 @@ public final class Pomo {
             remaining = phaseMs(next);
         }
         return ev;
+    }
+
+    /** 下一段要不要自动开跑：休息看 auto，下一轮专注看 autoFocus（两个开关分开） */
+    private boolean autoNext(int next) {
+        return next == WORK ? cfg.autoFocus : cfg.auto;
     }
 
     private void begin(int s, long now) {

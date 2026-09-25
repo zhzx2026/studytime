@@ -12,7 +12,12 @@ public final class Cfg {
     public int goalPomos = 4;     // 每日目标（番茄个数）
     public boolean sound = true;  // 完成提示音
     public boolean vibrate = true;// 振动
-    public boolean auto = true;   // 到点自动进入下一段
+    /** 专注到点自动进入休息 */
+    public boolean auto = true;
+    /** 休息到点自动开始下一轮（默认关：挂着机也会自己开跑，容易凭空多出番茄） */
+    public boolean autoFocus = false;
+    /** 计时中屏幕常亮 */
+    public boolean keepOn = false;
 
     public Cfg() {}
 
@@ -30,7 +35,8 @@ public final class Cfg {
     public String save() {
         return "w=" + workMin + ",s=" + shortMin + ",l=" + longMin + ",n=" + longEvery +
                ",g=" + goalPomos + ",snd=" + (sound ? 1 : 0) +
-               ",vib=" + (vibrate ? 1 : 0) + ",auto=" + (auto ? 1 : 0);
+               ",vib=" + (vibrate ? 1 : 0) + ",auto=" + (auto ? 1 : 0) +
+               ",af=" + (autoFocus ? 1 : 0) + ",ko=" + (keepOn ? 1 : 0);
     }
 
     public static Cfg load(String s) {
@@ -50,6 +56,8 @@ public final class Cfg {
                 else if (k.equals("snd")) c.sound = !v.equals("0");
                 else if (k.equals("vib")) c.vibrate = !v.equals("0");
                 else if (k.equals("auto")) c.auto = !v.equals("0");
+                else if (k.equals("af")) c.autoFocus = !v.equals("0");
+                else if (k.equals("ko")) c.keepOn = !v.equals("0");
             } catch (NumberFormatException ignore) {
             }
         }

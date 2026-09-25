@@ -60,6 +60,7 @@ public class PomoTest {
                 int[] e2 = q.tick(t);
                 T.eqi(Pomo.EV_SHORT, e2[0], "短休到点");
                 T.eqi(Pomo.WORK, q.state, "短休后回专注");
+                q.resume(t); // 默认 af=false：下一轮等我开始 → 手动续上
             } else {
                 T.eqi(Pomo.LONG, q.state, "第4轮进长休");
                 T.eqi(0, q.cycle, "长休时轮次归零");
@@ -84,7 +85,7 @@ public class PomoTest {
         T.ok(r.running, "手动继续短休");
 
         // 8. 意外退出补账
-        // 8a. 离开 30 分钟（25 专注 + 5 短休恰好走完）→ 回来时下一段专注已经开跑
+        // 8a. 离开 30 分钟（25 专注 + 5 短休恰好走完）→ 默认 af=false：下一段停表等我
         Pomo s = mk();
         s.start(now);
         int[] e5 = s.tick(now + 30 * MIN);
@@ -92,8 +93,8 @@ public class PomoTest {
         T.eqi(Pomo.EV_WORK, e5[0], "先结专注");
         T.eqi(Pomo.EV_SHORT, e5[1], "再结短休");
         T.eqi(Pomo.WORK, s.state, "落到下一段专注");
-        T.ok(s.running, "下一段按原时间轴在跑");
-        T.eqi(now + 55 * MIN, s.endAt, "下一段从短休结束点起算");
+        T.ok(!s.running, "默认休息结束不开跑（af=false）");
+        T.eqi(25 * MIN, s.remaining, "下一段剩余拉满等我");
         T.eqi(1, s.cycle, "补账只承认一个番茄");
 
         // 8b. 离开 3 小时 → 承认一个番茄 + 休息，下一段停表拉满（不凭空多记）
@@ -121,8 +122,9 @@ public class PomoTest {
         T.eqi(1, e6.length, "恰好到点只结一个");
         T.eqi(Pomo.SHORT, s3.state, "随后是短休");
 
-        // 11. 跳过休息（running）
+        // 11. 跳过休息（running；af 打开才谈得上「按原轴接下一轮」）
         Pomo u = mk();
+        u.cfg.autoFocus = true;
         u.start(now);
         long wEnd = now + 25 * MIN;
         u.tick(wEnd); // → 短休 running
@@ -168,6 +170,29 @@ public class PomoTest {
         T.ok(v5.load(v4.save()), "暂停快照载入");
         T.ok(!v5.running, "仍是暂停");
         T.eqi(15 * MIN, v5.remaining, "剩余 15 分钟恢复");
+
+        // 16. af=true：休息结束自动接下一轮（v1.0 老行为，给要链式的用户留着）
+        Pomo g = mk();
+        g.cfg.autoFocus = true;
+        g.start(now);
+        g.tick(now + 25 * MIN); // WORK → 短休 running
+        int[] e8 = g.tick(now + 30 * MIN); // 短休到点
+        T.eqi(1, e8.length, "短休到点只结一个");
+        T.eqi(Pomo.EV_SHORT, e8[0], "事件是短休");
+        T.eqi(Pomo.WORK, g.state, "进下一段专注");
+        T.ok(g.running, "af on 下一段自动开跑");
+        T.eqi(now + 55 * MIN, g.endAt, "时间轴续在短休结束点");
+
+        // 17. 默认 af=false：短休到点不开跑下一轮，拉满等我
+        Pomo h = mk();
+        h.start(now);
+        h.tick(now + 25 * MIN); // WORK → 短休 running
+        int[] e9 = h.tick(now + 30 * MIN);
+        T.eqi(1, e9.length, "短休到点只结一个");
+        T.eqi(Pomo.WORK, h.state, "落到下一段专注");
+        T.ok(!h.running, "默认下一轮等我开始");
+        T.eqi(25 * MIN, h.remaining, "剩余拉满整段");
+        T.eqi(0, h.endAt, "停表没有 endAt");
 
         T.done("PomoTest");
     }
