@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: 工具链（官方源；不通会自动走镜像兜底）
+        run: bash scripts/setup_tools.sh
+      - name: 主机侧测试
+        run: bash scripts/run_tests.sh
+      - name: 静态体检
+        run: python3 scripts/refcheck.py
+      - name: 版本号对账
+        run: bash scripts/version.sh check
+      - name: 构建 APK（测试钥匙）
+        run: ALLOW_FRESH_KEY=1 bash build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studytime-apk
+          path: studytime-v*.apk
+          if-no-files-found: error

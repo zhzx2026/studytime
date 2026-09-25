@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 纸感浅色（暖白） -->
+    <color name="bg">#FAF7F2</color>
+    <color name="card">#FFFFFF</color>
+    <color name="text">#2B2A28</color>
+    <color name="text2">#8D877E</color>
+    <color name="accent">#E5533D</color>
+    <color name="green">#3FA66B</color>
+    <color name="track">#ECE6DC</color>
+    <color name="div">#EDE7DE</color>
+    <color name="chip">#F1ECE4</color>
+    <color name="heat0">#EFEAE2</color>
+    <color name="heat1">#F9CDBF</color>
+    <color name="heat2">#F29881</color>
+    <color name="heat3">#E5654A</color>
+    <color name="heat4">#C93F26</color>
+    <color name="sel">#2B2A28</color>
+    <!-- 自适应图标底色（日夜都不变，保证桌面识别度） -->
+    <color name="ic_launcher_bg">#FFE3D6</color>
+</resources>

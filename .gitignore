@@ -1,0 +1,21 @@
+# 构建产物
+build/
+*.apk
+*.apks
+
+# 工具链（scripts/setup_tools.sh 装到这里，不入库）
+tools/
+
+# 签名钥匙：务必备份，绝不能提交（丢了 = 老用户无法覆盖安装）
+studytime.keystore
+*.keystore
+fresh.keystore
+
+# 测试输出
+test/out/
+test/src/
+
+# 杂项
+*.log
+*.swp
+.DS_Store
