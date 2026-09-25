@@ -23,6 +23,9 @@ final class FocusPage extends Page {
     private LinearLayout todayList;
     private final Handler h = new Handler(Looper.getMainLooper());
     private boolean visible;
+    /** 上次渲染的状态（避免 250ms 一次地重复换背景 / 改窗口 flag，那会触发窗口重新布局） */
+    private int lastBtnColor = 0;
+    private boolean keepOn;
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!visible) return;
@@ -188,16 +191,24 @@ final class FocusPage extends Page {
 
         String label = p.running ? "暂停" : p.started ? "继续" : "开始" + (p.phase == Pomo.FOCUS ? "专注" : "休息");
         startBtn.setText(label);
-        int r = Ui.dp(act, 26);
-        startBtn.setBackground(Ui.ripple(Ui.rr(pc, r), Ui.rr(Color.BLACK, r)));
+        if (pc != lastBtnColor) {
+            lastBtnColor = pc;
+            int r = Ui.dp(act, 26);
+            startBtn.setBackground(Ui.ripple(Ui.rr(pc, r), Ui.rr(Color.BLACK, r)));
+        }
         resetBtn.setAlpha(p.started ? 1f : 0.4f);
         resetBtn.setEnabled(p.started);
 
         Store.Task t = p.taskId >= 0 ? Store.get(act).task(p.taskId) : null;
         taskTv.setText(t != null ? "🎯 " + t.title + "  ·  🍅" + t.pomos + "/" + t.est + "  ▾" : "🎯 选择要专注的待办  ▾");
 
-        boolean keep = p.running && visible && Store.get(act).getBool(Store.K_KEEP_ON, false);
-        if (keep) act.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setKeepOn(p.running && visible && Store.get(act).getBool(Store.K_KEEP_ON, false));
+    }
+
+    private void setKeepOn(boolean on) {
+        if (on == keepOn) return;
+        keepOn = on;
+        if (on) act.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
@@ -310,7 +321,7 @@ final class FocusPage extends Page {
     void onHide() {
         visible = false;
         h.removeCallbacks(tick);
-        act.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setKeepOn(false);
     }
 
     @Override
