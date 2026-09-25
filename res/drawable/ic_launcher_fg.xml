@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 番茄果身 -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M54,36c-13.8,0 -24,9.6 -24,22.5S40.2,80 54,80s24,-8.6 24,-21.5S67.8,36 54,36z"/>
+    <!-- 叶子 -->
+    <path android:fillColor="#FF3FA06A"
+        android:pathData="M54,30l3.2,6.4 7.2,-1.6 -4.6,5.4 5.2,4.6 -7.4,-0.4 -3.6,6.2 -3.6,-6.2 -7.4,0.4 5.2,-4.6 -4.6,-5.4 7.2,1.6z"/>
+    <!-- 对勾 -->
+    <path android:strokeColor="#FFE8554E" android:strokeWidth="5" android:strokeLineCap="round"
+        android:strokeLineJoin="round" android:fillColor="#00000000"
+        android:pathData="M43,60l7.5,7.5 15,-15"/>
+</vector>

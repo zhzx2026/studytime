@@ -1,0 +1,11 @@
+build/
+dist/
+tools/
+test/out/
+test/src/
+*.log
+__pycache__/
+node_modules/
+studytime-v*.apk
+# 正式签名钥匙（若以后从 Secret 恢复）绝不入库；signing/debug.keystore 是公开的测试钥匙，允许入库
+studytime.keystore

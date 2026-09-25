@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#FFF7F3EE</color>
+    <color name="card">#FFFFFFFF</color>
+    <color name="field">#FFF1ECE6</color>
+    <color name="text">#FF2B2622</color>
+    <color name="sub">#FF8A817A</color>
+    <color name="line">#FFE8E1D9</color>
+    <color name="brand">#FFE8554E</color>
+    <color name="brand_soft">#FFFBE3E1</color>
+    <color name="green">#FF34A36B</color>
+    <color name="green_soft">#FFDDF2E6</color>
+    <color name="blue">#FF4A86D9</color>
+    <color name="blue_soft">#FFE0ECFA</color>
+    <color name="amber">#FFE9A23B</color>
+    <color name="launcher_bg">#FFE8554E</color>
+</resources>

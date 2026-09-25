@@ -1,0 +1,70 @@
+# 合并即转正：main 上的版本是 stable（X.0）且 tag 不存在 → 测试 + 构建 + 打 tag + 发 GitHub Release。
+# dev 版（X.Y）合进 main 不发布（先 bash scripts/version.sh promote 再合）。规则见 VERSIONING.md。
+name: release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+
+      - name: Gate
+        id: gate
+        run: |
+          VER=$(grep -oE 'versionName="[^"]*"' AndroidManifest.xml | sed 's/versionName="//;s/"//')
+          VC=$(grep -oE 'versionCode="[0-9]*"' AndroidManifest.xml | sed 's/[^0-9]//g')
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"; echo "vc=$VC" >> "$GITHUB_OUTPUT"
+          if ! printf '%s' "$VER" | grep -Eq '^[0-9]+\.0$'; then
+            echo "go=no" >> "$GITHUB_OUTPUT"; echo "::notice::v$VER 是 dev 版，不发布（先 version.sh promote）"; exit 0; fi
+          if git ls-remote --tags origin | awk '{print $2}' | grep -Fxq "refs/tags/v$VER"; then
+            echo "go=no" >> "$GITHUB_OUTPUT"; echo "::notice::tag v$VER 已存在，跳过"; exit 0; fi
+          echo "go=yes" >> "$GITHUB_OUTPUT"
+
+      - name: Host tests
+        if: steps.gate.outputs.go == 'yes'
+        run: bash scripts/version.sh check && bash scripts/run_tests.sh
+
+      - name: Install Android SDK pieces
+        if: steps.gate.outputs.go == 'yes'
+        run: |
+          mkdir -p $RUNNER_TEMP/sdk/build-tools $RUNNER_TEMP/sdk/platforms
+          curl -sSL -o bt.zip https://dl.google.com/android/repository/build-tools_r34-linux.zip
+          unzip -q bt.zip -d btX && mv btX/android-14 $RUNNER_TEMP/sdk/build-tools/34.0.0
+          curl -sSL -o p.zip https://dl.google.com/android/repository/platform-34-ext7_r02.zip
+          unzip -q p.zip -d pX && mv pX/android-34 $RUNNER_TEMP/sdk/platforms/android-34
+
+      - name: Restore keystore
+        if: steps.gate.outputs.go == 'yes'
+        env: { KEYSTORE_B64: "${{ secrets.KEYSTORE_B64 }}" }
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then echo "$KEYSTORE_B64" | base64 -d > studytime.keystore;
+          else echo "::warning::未配置 Secret KEYSTORE_B64 → 正式版也用公开测试钥匙签名（见 signing/README.md）"; fi
+
+      - name: Build
+        if: steps.gate.outputs.go == 'yes'
+        env: { SDK_ROOT: "${{ runner.temp }}/sdk", KS_PASS: "${{ secrets.KS_PASS }}", GIT_BRANCH: main }
+        run: bash build.sh
+
+      - name: Tag + Release
+        if: steps.gate.outputs.go == 'yes'
+        env: { GH_TOKEN: "${{ github.token }}", GIT_BRANCH: main }
+        run: |
+          set -eo pipefail
+          VER=${{ steps.gate.outputs.ver }}; TAG="v$VER"
+          mkdir -p dist && cp "studytime-v$VER.apk" dist/studytime.apk
+          bash scripts/make_update_json.sh "https://github.com/${{ github.repository }}/releases/download/$TAG/studytime.apk" dist/update.json
+          python3 -c "import json;print(json.load(open('dist/update.json'))['notes'])" > notes.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "学习时光 $TAG（code ${{ steps.gate.outputs.vc }}）"
+          git push origin "refs/tags/$TAG"
+          gh release create "$TAG" dist/studytime.apk dist/update.json --title "学习时光 $TAG" --notes-file notes.txt --latest
+          gh release view "$TAG" --json tagName,url --jq '"✓ \(.tagName) \(.url)"'
