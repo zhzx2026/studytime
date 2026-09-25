@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色（navy 系，和热力图红形成层次） -->
+    <color name="bg">#17191D</color>
+    <color name="card">#21242A</color>
+    <color name="text">#ECEAE6</color>
+    <color name="text2">#96918A</color>
+    <color name="accent">#F0705A</color>
+    <color name="green">#57B87F</color>
+    <color name="track">#2E323A</color>
+    <color name="div">#2C3038</color>
+    <color name="chip">#262A31</color>
+    <color name="heat0">#262A31</color>
+    <color name="heat1">#4E3029</color>
+    <color name="heat2">#8A4032</color>
+    <color name="heat3">#C0523B</color>
+    <color name="heat4">#F0785C</color>
+    <color name="sel">#ECEAE6</color>
+</resources>

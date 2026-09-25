@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.aidemo.studytime"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- 到点提醒：通知（13+ 运行时申请）+ 精确闹钟（13+ USE_EXACT_ALARM 自动授；12/12L 走 SCHEDULE_EXACT_ALARM） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32"/>
+
+    <application
+        android:name=".App"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:hardwareAccelerated="true"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.StudyTime">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- 设置：番茄时长 / 休息 / 目标 / 提示 / 数据 / 关于 -->
+        <activity android:name=".SettingsActivity" android:exported="false"
+            android:configChanges="orientation|screenSize" />
+        <!-- 番茄到点：App 在后台/被杀也由系统叫醒结算并提醒 -->
+        <receiver android:name=".AlarmReceiver" android:exported="false" />
+    </application>
+</manifest>
